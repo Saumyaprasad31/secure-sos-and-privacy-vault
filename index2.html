@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Secure SOS & Privacy Vault</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+  <style>
+    body { font-family: Arial; background:#111; color:white; text-align:center; padding:20px; }
+    button { padding:10px 20px; margin:5px; cursor:pointer; border:none; border-radius:6px; }
+    .tab { display:none; margin-top:20px; }
+    .active { display:block; }
+    input, textarea { width:80%; padding:10px; margin:5px; border-radius:6px; border:none; }
+    .box { background:#222; padding:15px; border-radius:10px; margin-top:10px; }
+  </style>
+</head>
+
+<body>
+
+<h1>Secure SOS & Privacy Vault</h1>
+
+<button onclick="showTab('sos')">SOS</button>
+<button onclick="showTab('vault')">Vault</button>
+<button onclick="showTab('threat')">Threat Score</button>
+
+<!-- SOS TAB -->
+<div id="sos" class="tab active">
+  <h2>🚨 SOS Alert</h2>
+  <button style="background:red;color:white;" onclick="sendSOS()">SEND SOS</button>
+  <div class="box" id="sosOutput">Waiting...</div>
+</div>
+
+<!-- VAULT TAB -->
+<div id="vault" class="tab">
+  <h2>🔐 Privacy Vault</h2>
+
+  <div id="lockScreen">
+    <p>Enter PIN (Default: 1234)</p>
+    <input type="password" id="pin" placeholder="Enter PIN">
+    <button onclick="unlockVault()">Unlock</button>
+    <p id="pinMsg"></p>
+  </div>
+
+  <div id="vaultScreen" style="display:none;">
+    <input id="label" placeholder="Label (eg Gmail)">
+    <textarea id="secret" placeholder="Enter secret"></textarea>
+    <button onclick="saveSecret()">Save Encrypted</button>
+
+    <h3>Stored Items:</h3>
+    <div class="box" id="vaultList"></div>
+
+    <button style="background:orange;" onclick="lockVault()">Lock</button>
+  </div>
+</div>
+
+<!-- THREAT TAB -->
+<div id="threat" class="tab">
+  <h2>📡 Threat Score Engine</h2>
+
+  <p>Emotion Confidence (0-1)</p>
+  <input type="number" id="emotion" value="0.5" step="0.1">
+
+  <p>Distress Duration (seconds)</p>
+  <input type="number" id="duration" value="30">
+
+  <p>Time of Day</p>
+  <select id="time">
+    <option value="day">Day</option>
+    <option value="night">Night</option>
+  </select>
+
+  <br><br>
+  <button style="background:lime;" onclick="calcThreat()">Calculate Score</button>
+
+  <div class="box" id="threatOutput">Score will appear here...</div>
+</div>
+
+<script>
+  const KEY = "safeguard_key";
+  let vaultData = [];
+
+  function showTab(tabId) {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.getElementById(tabId).classList.add("active");
+  }
+
+  // SOS
+  function sendSOS() {
+    let output = document.getElementById("sosOutput");
+    output.innerHTML = "Getting location...";
+
+    navigator.geolocation.getCurrentPosition(pos => {
+      let lat = pos.coords.latitude;
+      let lon = pos.coords.longitude;
+      let link = `https://maps.google.com/?q=${lat},${lon}`;
+      output.innerHTML = `HELP! I am in danger.<br>Location: <a href="${link}" target="_blank">${link}</a>`;
+    }, () => {
+      output.innerHTML = "Location access denied.";
+    });
+  }
+
+  // VAULT
+  function unlockVault() {
+    let pin = document.getElementById("pin").value;
+    if(pin === "1234") {
+      document.getElementById("lockScreen").style.display = "none";
+      document.getElementById("vaultScreen").style.display = "block";
+      loadVault();
+    } else {
+      document.getElementById("pinMsg").innerText = "Wrong PIN!";
+    }
+  }
+
+  function lockVault() {
+    document.getElementById("lockScreen").style.display = "block";
+    document.getElementById("vaultScreen").style.display = "none";
+  }
+
+  function saveSecret() {
+    let label = document.getElementById("label").value;
+    let secret = document.getElementById("secret").value;
+
+    if(label=="" || secret=="") {
+      alert("Fill all fields!");
+      return;
+    }
+
+    let encrypted = CryptoJS.AES.encrypt(secret, KEY).toString();
+    vaultData.push({label, encrypted});
+    localStorage.setItem("vaultData", JSON.stringify(vaultData));
+
+    document.getElementById("label").value = "";
+    document.getElementById("secret").value = "";
+
+    displayVault();
+  }
+
+  function loadVault() {
+    let data = localStorage.getItem("vaultData");
+    if(data) vaultData = JSON.parse(data);
+    displayVault();
+  }
+
+  function displayVault() {
+    let list = document.getElementById("vaultList");
+    list.innerHTML = "";
+
+    vaultData.forEach((item, i) => {
+      let decrypted = CryptoJS.AES.decrypt(item.encrypted, KEY).toString(CryptoJS.enc.Utf8);
+      list.innerHTML += `<p><b>${item.label}</b>: ${decrypted}</p>`;
+    });
+  }
+
+  // THREAT SCORE
+  function calcThreat() {
+    let emotion = parseFloat(document.getElementById("emotion").value);
+    let duration = parseFloat(document.getElementById("duration").value);
+    let time = document.getElementById("time").value;
+
+    let eScore = emotion * 40;
+    let dScore = (duration / 300) * 40;
+    let tScore = (time === "night") ? 20 : 0;
+
+    let total = Math.min(Math.round(eScore + dScore + tScore), 100);
+
+    let msg = "Threat Score: " + total;
+
+    if(total > 70) msg += "<br>⚠ HIGH RISK: SOS SHOULD TRIGGER!";
+    else if(total > 40) msg += "<br>⚠ MODERATE RISK";
+    else msg += "<br>✅ LOW RISK";
+
+    document.getElementById("threatOutput").innerHTML = msg;
+  }
+</script>
+
+</body>
+</html>
